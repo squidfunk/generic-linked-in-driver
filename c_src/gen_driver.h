@@ -152,29 +152,29 @@ void dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state);
  * [2] http://erlang.org/doc/apps/erts/driver.html
  */
 #define DRIVER(name) static ErlDrvEntry driver_entry = {                      \
-  NULL,		 /* [init] System startup */                                        \
-  start, 	 /* [start] open_port/2 is invoked, must return -1 on fail */       \
-  stop, 	 /* [stop] Port is closed */                                        \
-  NULL, 	 /* [output] There's output from Erlang to the port */              \
-  NULL, 	 /* [ready_input] There's input from one of the driver's handles */ \
-  NULL, 	 /* [ready_output] Output to one of the handles is possible */      \
+  NULL,    /* [init] System startup */                                        \
+  start,   /* [start] open_port/2 is invoked, must return -1 on fail */       \
+  stop,    /* [stop] Port is closed */                                        \
+  NULL,    /* [output] There's output from Erlang to the port */              \
+  NULL,    /* [ready_input] There's input from one of the driver's handles */ \
+  NULL,    /* [ready_output] Output to one of the handles is possible */      \
   DRIVER_STRING(name),                                                        \
-  NULL, 	 /* [finish] The driver is about to be unloaded */                  \
-  NULL,		 /* [reserved] */                                                   \
+  NULL,    /* [finish] The driver is about to be unloaded */                  \
+  NULL,    /* [reserved] */                                                   \
   control, /* [control] I/O control for drivers, invoked by port_control/3 */ \
-  NULL, 	 /* [timeout] Handling of timeouts in the driver */                 \
-  NULL, 	 /* [outputv] There's output from Erlang to the port (faster!) */   \
+  NULL,    /* [timeout] Handling of timeouts in the driver */                 \
+  NULL,    /* [outputv] There's output from Erlang to the port (faster!) */   \
   ready,   /* [ready_async] An asynchronous request was completed */          \
-  NULL, 	 /* [flush] The port is about to be closed. */                      \
-  NULL,		 /* [call] I/O control for drivers, but uses ext. term format */    \
-  NULL,		 /* [reserved] */                                                   \
+  NULL,    /* [flush] The port is about to be closed. */                      \
+  NULL,    /* [call] I/O control for drivers, but uses ext. term format */    \
+  NULL,    /* [reserved] */                                                   \
   ERL_DRV_EXTENDED_MARKER,          /* Marker to signal extended driver */    \
   ERL_DRV_EXTENDED_MAJOR_VERSION,   /* Mandatory after extended marker */     \
   ERL_DRV_EXTENDED_MINOR_VERSION,   /* Mandatory after extended marker */     \
   ERL_DRV_FLAG_USE_PORT_LOCKING,    /* Use port-level locking */              \
-  NULL,		 /* [reserved] */                                                   \
-  NULL, 	 /* [process_exit] A monitored process exits */                     \
-  NULL 		 /* [stop_select] Asynchronous event handling */                    \
+  NULL,    /* [reserved] */                                                   \
+  NULL,    /* [process_exit] A monitored process exits */                     \
+  NULL     /* [stop_select] Asynchronous event handling */                    \
 };                                                                            \
 DRIVER_INIT(name) {                                                           \
   return &driver_entry;                                                       \

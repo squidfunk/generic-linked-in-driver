@@ -19,7 +19,7 @@
 %% IN THE SOFTWARE.
 
 { application, gen_driver, [
-  { description, "Generic non-blocking linked-in driver implementation" },
+  { description, "Generic non-blocking linked-in driver for Erlang" },
   { vsn, "0.1.0" },
   { modules, [] },
   { registered, [] },
