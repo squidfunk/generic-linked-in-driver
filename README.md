@@ -99,7 +99,7 @@ a new file, include the [gen_driver.h][] header file and define the necessary
 callbacks. As the driver is located in `deps`, you have to include the header
 file with:
 
-``` C
+``` c
 #include "../../deps/gen_driver/c_src/gen_driver.h"
 ```
 
@@ -164,7 +164,7 @@ driver- and thread-level. While the driver initializers are executed during the
 start up phase, thread initializers are executed upon the first invocation of a
 thread. Taken from [gen_driver.h][], these callbacks are:
 
-``` C
+``` c
 /**
  * Callbacks which manage memory of driver-specific state data.
  */
@@ -188,7 +188,7 @@ All callbacks must be defined, even if there's no thread-specific data to hold
 or no custom balancing among threads. Thus, a minimal implementation which can
 be used as a skeleton when developing a new driver could be:
 
-``` C
+``` c
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -261,7 +261,7 @@ parsed using the [Erlang Interface][] functions. This is far from being a
 complicated task, so for example, parsing a tuple of the form
 `{ question, "Why are we here?" }` is as simple as:
 
-``` C
+``` c
 ei_decode_tuple_header(req->buf, &req->index, &size);
 ei_decode_atom(req->buf, &req->index, "question");
 ei_decode_string(req->buf, &req->index, &question);
@@ -274,7 +274,7 @@ after translating an Erlang term into native C datatypes, and doing our
 calculations, we can take the opposite direction and encode the result using
 the same interface:
 
-``` C
+``` c
 ei_encode_tuple_header(res->buf, &res->index, 2);
 ei_encode_atom(res->buf, &res->index, "answer");
 ei_encode_string(res->buf, &res->index, "Plastic!\0");
@@ -290,7 +290,7 @@ If an error is encountered during parsing or processing, the helper function
 `error/2` can be used to exit from a handler. The first parameter has to be the
 respective `res` struct, the second the atom to return, so e.g.:
 
-``` C
+``` c
 return error(res, "badtype"); // => { error, badtype }
 ```
 
