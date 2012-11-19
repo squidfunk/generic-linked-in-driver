@@ -20,8 +20,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef __GEN_DRIVER_EXAMPLE__
-#define __GEN_DRIVER_EXAMPLE__
+#ifndef __GEN_DRIVER_TEST__
+#define __GEN_DRIVER_TEST__
 
 #include "gen_driver.h"
 
@@ -33,17 +33,17 @@
  * This structure is an example for driver-specific state data and holds the
  * amount of calls made to the driver.
  */
-typedef struct gde_drv_t {
+typedef struct gdt_drv_t {
   int count;
-} gde_drv_t;
+} gdt_drv_t;
 
 /**
  * This structure is an example for thread-specific state data and holds the
  * amount of calls made to the respective thread.
  */
-typedef struct gde_trd_ {
+typedef struct gdt_trd_ {
   int count;
-} gde_trd_t;
+} gdt_trd_t;
 
 /* ----------------------------------------------------------------------------
  * Macros

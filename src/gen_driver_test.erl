@@ -41,8 +41,8 @@
 %% Public functions
 %% ----------------------------------------------------------------------------
 
-% Load the specified driver and start the associated generic server. The port
-% is opened in init/1, the pid is returned.
+% Load the specified driver and start the associated generic server. The pid of
+% the generic server managing the driver is returned.
 -spec start_link()
   -> { ok, pid() } | { error, any() }.
 start_link() ->

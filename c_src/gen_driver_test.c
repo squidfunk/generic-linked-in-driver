@@ -38,7 +38,7 @@
  * returning the resulting sum.
  */
 static void
-handle_sum(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
+handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
   int type, size;
 
   /* Determine type and size */
@@ -129,7 +129,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
  * increments the internal driver and thread counters.
  */
 static void
-handle_ping(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
+handle_ping(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
   drv->count++;
   trd->count++;
 }
@@ -139,7 +139,7 @@ handle_ping(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
  * thread. This function does not send any arguments to the driver.
  */
 static void
-handle_stats(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
+handle_stats(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
 
   /* Encode return tuple header */
   ei_encode_tuple_header(res->buf, &res->index, 2);
@@ -172,8 +172,8 @@ handle_stats(gd_req_t *req, gd_res_t *res, gde_drv_t *drv, gde_trd_t *trd) {
  */
 void *
 init() {
-  gde_drv_t *drv;
-  if ((drv = driver_alloc(sizeof(gde_drv_t))) == NULL) /* destroy */
+  gdt_drv_t *drv;
+  if ((drv = driver_alloc(sizeof(gdt_drv_t))) == NULL) /* destroy */
     return NULL;
   drv->count = 0;
   return (void *)drv;
@@ -194,8 +194,8 @@ destroy(void *drv_state) {
  */
 void *
 thread_init() {
-  gde_trd_t *trd;
-  if ((trd = driver_alloc(sizeof(gde_trd_t))) == NULL) /* thread_destroy */
+  gdt_trd_t *trd;
+  if ((trd = driver_alloc(sizeof(gdt_trd_t))) == NULL) /* thread_destroy */
     return NULL;
   trd->count = 0;
   return (void *)trd;
@@ -211,7 +211,7 @@ thread_destroy(void *trd_state) {
 }
 
 /**
- * Load balancing among threads. The balancing is implemented as a modulo
+ * Load balancing among threads. Balancing is implemented as a modulo
  * operation: % THREADS. Return null for round-robin strategy.
  */
 unsigned int *
@@ -225,8 +225,8 @@ balance(int cmd, unsigned char syn, unsigned int *key) {
  */
 void
 dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state) {
-  gde_drv_t *drv = drv_state;
-  gde_trd_t *trd = trd_state;
+  gdt_drv_t *drv = drv_state;
+  gdt_trd_t *trd = trd_state;
 
   /* Dispatch the request */
   switch (req->cmd) {

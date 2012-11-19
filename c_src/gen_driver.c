@@ -83,7 +83,7 @@ async(void *data) {
       break;
   }
 
-  /* Dispatch unless an error occured */
+  /* Dispatch unless an error occurred */
   if (!strlen(ptr->res->error))
     dispatch(ptr->req, ptr->res, ptr->drv_state, trd_state);
 }
@@ -145,7 +145,7 @@ stop(ErlDrvData drv_data) {
  *
  * If the caller made a synchronous request and is interested in the result,
  * output the data contained in the result buffer to the port, unless an error
- * occured. In this case just return the error. If no data was set (the index
+ * occurred. In this case just return the error. If no data was set (the index
  * is still at position 1), just return ok.
  */
 void
