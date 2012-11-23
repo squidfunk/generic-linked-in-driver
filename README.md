@@ -325,13 +325,13 @@ Everything else is already implemented.
 Now that we're done implementing our driver, we need to build it. As already
 stated, it is absolutely recommended to use [Rebar][] or a similar build-tool
 for this task. Building our newly created linked-in driver, we need to specify
-the driver path (e.g. `priv`) and name (e.g. `test`), which must match the file
+the driver path (e.g. `priv`) and name (e.g. `test`) which must match the file
 name of the resulting binary (`test.so`), and link against the generic driver:
 
 ``` erlang
 { port_specs, [
   { ".*", "priv/test.so", [
-    "c_src/*.c*"
+    "deps/gen_driver.c/c_src/gen_driver.c", "c_src/*.c*"
   ], [
     { env, [
       { "CFLAGS", "$CFLAGS -std=c99 -I deps/gen_driver/c_src -D DRIVER_NAME=test" }
