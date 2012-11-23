@@ -331,7 +331,7 @@ name of the resulting binary (`test.so`), and link against the generic driver:
 ``` erlang
 { port_specs, [
   { ".*", "priv/test.so", [
-    "deps/gen_driver.c/c_src/gen_driver.c", "c_src/*.c*"
+    "deps/gen_driver/c_src/gen_driver.c", "c_src/*.c*"
   ], [
     { env, [
       { "CFLAGS", "$CFLAGS -std=c99 -I deps/gen_driver/c_src -D DRIVER_NAME=test" }
