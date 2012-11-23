@@ -96,15 +96,20 @@ After fetching your dependencies with `rebar get-deps`, you can start driver
 development. Rebar expects your C source to be located in a directory called
 `c_src`. If it isn't there already, create it. Then you just have to create
 a new file, include the [gen_driver.h][] header file and define the necessary
-callbacks. As the driver is located in `deps`, you have to include the header
-file with:
+callbacks. The header can be included with:
 
 ``` c
-#include "../../deps/gen_driver/c_src/gen_driver.h"
+#include "gen_driver.h"
 ```
 
-Obviously, this is not very beautiful, but it lets you manage the driver as a
-dependency.
+During compilation, the folders containing the header files have to be
+included with the following flag:
+
+```
+-I deps/gen_driver/c_src
+```
+
+See the section discussing the build process for more information.
 
 ### As a copy
 
@@ -321,24 +326,25 @@ Now that we're done implementing our driver, we need to build it. As already
 stated, it is absolutely recommended to use [Rebar][] or a similar build-tool
 for this task. Building our newly created linked-in driver, we need to specify
 the driver path (e.g. `priv`) and name (e.g. `test`), which must match the file
-name of the resulting binary (`test.so`), and link against [gen_driver.c][].
+name of the resulting binary (`test.so`), and link against the generic driver:
 
 ``` erlang
 { port_specs, [
   { ".*", "priv/test.so", [
-    "../../deps/gen_driver/c_src/gen_driver.c", "c_src/*.c*"
+    "c_src/*.c*"
   ], [
     { env, [
-      { "CFLAGS", "$CFLAGS -std=c99 -D DRIVER_NAME=test" }
+      { "CFLAGS", "$CFLAGS -std=c99 -I deps/gen_driver/c_src -D DRIVER_NAME=test" }
     ] }
   ] }
 ] }.
 ```
 
 The generic driver is implemented using the C99 standard, so in case GCC is
-used for compiling the respective flag needs to be set, since GCC defaults to
-C89. As mentioned before, multiple instances of the same driver with different
-names and configurations can be compiled without any code duplication.
+used for compilation, the respective flag needs to be set, since GCC defaults to
+C89. The path where the generic driver source is located must also be included. As
+mentioned before, multiple instances of the same driver with different names and
+configurations can be compiled without any code duplication.
 
 ## License
 
