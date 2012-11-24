@@ -185,6 +185,5 @@ DRIVER_INIT(name) {                                                           \
  */
 #define GD_ERR_MEM "memory"
 #define GD_ERR_DEC "decode"
-#define GD_ERR_BUF "buffer"
 
 #endif

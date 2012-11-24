@@ -156,7 +156,7 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
   /* Check, if we reached the end of the request buffer */
   ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
   if (!strlen(ptr->res->error) && ptr->req->len != ptr->req->index)
-    error(ptr->res, GD_ERR_BUF);
+    error(ptr->res, GD_ERR_DEC);
 
   /* Check for error on synchronous request, output data */
   if (ptr->req->syn) {
