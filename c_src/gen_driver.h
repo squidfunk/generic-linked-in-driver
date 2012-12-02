@@ -104,6 +104,7 @@ ErlDrvSSizeT control(ErlDrvData drv_data, unsigned int cmd, char *buf,
  * Helper functions to ease communication.
  */
 void error(gd_res_t *res, char *error);
+int error_occurred(gd_res_t *res);
 
 /* ----------------------------------------------------------------------------
  * Driver callbacks

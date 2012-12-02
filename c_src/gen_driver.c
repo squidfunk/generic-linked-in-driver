@@ -155,12 +155,12 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
 
   /* Check, if we reached the end of the request buffer */
   ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
-  if (!strlen(ptr->res->error) && ptr->req->len != ptr->req->index)
+  if (!error_occurred(ptr->res) && ptr->req->len != ptr->req->index)
     error(ptr->res, GD_ERR_DEC);
 
   /* Check for error on synchronous request, output data */
   if (ptr->req->syn) {
-    if (strlen(ptr->res->error) && (ptr->res->index = 1))
+    if (error_occurred(ptr->res) && (ptr->res->index = 1))
       encode_error(ptr->res->buf, &ptr->res->index, ptr->res->error);
     else if (ptr->res->index == 1)
       encode_ok(ptr->res->buf, &ptr->res->index);
@@ -261,6 +261,14 @@ void
 error(gd_res_t *res, char *error) {
   strcpy(res->error, error);
   res->error[strlen(error)] = 0;
+}
+
+/**
+ * Examine the result and return true if an error occurred.
+ */
+int
+error_occurred(gd_res_t *res) {
+  return strlen(res->error) == 0 ? 0 : 1;
 }
 
 /* ----------------------------------------------------------------------------
