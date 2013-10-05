@@ -13,3 +13,6 @@
 
 # Ignore OSX internal files.
 .DS_Store
+
+# Ignore eunit test folder
+/.eunit/*
