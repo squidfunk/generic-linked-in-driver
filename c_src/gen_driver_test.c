@@ -46,7 +46,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
     return error(res, GDE_ERR_TPE);
 
   /* Allocate memory for numbers */
-  double *values, sum;
+  double *values, sum = 0;
   if ((values = driver_alloc(sizeof(double) * size)) == NULL)
     return error(res, GDE_ERR_MEM);
 

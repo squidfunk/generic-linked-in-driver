@@ -132,7 +132,8 @@ stop(ErlDrvData drv_data) {
   /* Destroy thread and driver states */
   destroy(drv->state);
   for (int t = 0; t < THREADS; t++)
-    thread_destroy(drv->trd[t].state);
+    if (drv->trd[t].tid)
+      thread_destroy(drv->trd[t].state);
 
   /* Free thread states and driver */
   driver_free(drv->trd); /* start */
