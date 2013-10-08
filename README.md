@@ -254,7 +254,7 @@ dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state) {
     /* Branch here */
 
     default:
-      error(res, "command");
+      error_set(res, "command");
   }
 }
 ```
@@ -292,11 +292,11 @@ allocated memory is still sufficient with `res->index < 64`. If it isn't, just
 re-allocate some more bytes.
 
 If an error is encountered during parsing or processing, the helper function
-`error/2` can be used to exit from a handler. The first parameter has to be the
+`error_set/2` can be used to exit from a handler. The first parameter has to be the
 respective `res` struct, the second the atom to return, so e.g.:
 
 ``` c
-return error(res, "badtype"); // => { error, badtype }
+return error_set(res, "badtype"); // => { error, badtype }
 ```
 
 This translates to the tuple `{ error, badtype }` on the Erlang side. You don't

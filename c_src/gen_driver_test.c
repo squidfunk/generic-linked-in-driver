@@ -43,12 +43,12 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
 
   /* Determine type and size */
   if (ei_get_type(req->buf, &req->index, &type, &size) || size <= 0)
-    return error(res, GDE_ERR_TPE);
+    return error_set(res, GDE_ERR_TPE);
 
   /* Allocate memory for numbers */
   double *values, sum = 0;
   if ((values = driver_alloc(sizeof(double) * size)) == NULL)
-    return error(res, GDE_ERR_MEM);
+    return error_set(res, GDE_ERR_MEM);
 
   /* Decode list */
   switch (type) {
@@ -57,7 +57,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
     case ERL_STRING_EXT: {
       char value[size];
       if (ei_decode_string(req->buf, &req->index, (char *)&value))
-        return error(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DEC);
       for (int v = 0; v < size; v++)
         values[v] = (double)value[v];
       break;
@@ -66,7 +66,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
     /* Decode ordinary integer/double list */
     case ERL_LIST_EXT: {
       if (ei_decode_list_header(req->buf, &req->index, &size))
-        return error(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DEC);
       for (int v = 0, temp; v < size; v++) {
         ei_get_type(req->buf, &req->index, &type, &temp);
         switch (type) {
@@ -76,7 +76,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
           case ERL_INTEGER_EXT: {
             long value;
             if (ei_decode_long(req->buf, &req->index, &value))
-              return error(res, GDE_ERR_DEC);
+              return error_set(res, GDE_ERR_DEC);
             values[v] = (double)value;
             break;
           }
@@ -85,26 +85,26 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
           case ERL_FLOAT_EXT: {
             double value;
             if (ei_decode_double(req->buf, &req->index, &value))
-              return error(res, GDE_ERR_DEC);
+              return error_set(res, GDE_ERR_DEC);
             values[v] = (double)value;
             break;
           }
           
           /* Unsupported type */
           default:
-            return error(res, GDE_ERR_TPE);
+            return error_set(res, GDE_ERR_TPE);
         }
       }
 
       /* A list always contains an empty list at the end */
       if (ei_decode_list_header(req->buf, &req->index, NULL))
-        return error(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DEC);
       break;
     }
 
     /* Unsupported type */
     default:
-      return error(res, GDE_ERR_TPE);
+      return error_set(res, GDE_ERR_TPE);
   }
 
   /* Sum up values */
@@ -240,6 +240,6 @@ dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state) {
       handle_stats(req, res, drv, trd);
       break;
     default:
-      error(res, GDE_ERR_CMD);
+      error_set(res, GDE_ERR_CMD);
   }
 }
