@@ -76,7 +76,7 @@ async(void *data) {
     gd_trd_t *trd = ptr->trd_state;
     if (trd[t].tid == 0 && (trd[t].tid = tid))
       if ((trd[t].state = thread_init()) == NULL)
-        return error(ptr->res, GD_ERR_MEM);
+        return error_set(ptr->res, GD_ERR_MEM);
 
     /* Select thread-specific state */
     if (trd[t].tid == tid && (trd_state = trd[t].state))
@@ -157,7 +157,7 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
   /* Check, if we reached the end of the request buffer */
   ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
   if (!error_occurred(ptr->res) && ptr->req->len != ptr->req->index)
-    error(ptr->res, GD_ERR_DEC);
+    error_set(ptr->res, GD_ERR_DEC);
 
   /* Check for error on synchronous request, output data */
   if (ptr->req->syn) {
@@ -259,7 +259,7 @@ control(ErlDrvData drv_data, unsigned int cmd, char *buf,
  * Set an error to be returned by the driver.
  */
 void
-error(gd_res_t *res, char *error) {
+error_set(gd_res_t *res, char *error) {
   strcpy(res->error, error);
   res->error[strlen(error)] = 0;
 }
