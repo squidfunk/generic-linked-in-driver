@@ -1,0 +1,420 @@
+<!DOCTYPE html>
+<html>
+  <head>
+    <meta charset='utf-8'>
+    <meta http-equiv="X-UA-Compatible" content="chrome=1">
+    <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1">
+    <link href='https://fonts.googleapis.com/css?family=Architects+Daughter' rel='stylesheet' type='text/css'>
+    <link rel="stylesheet" type="text/css" href="stylesheets/stylesheet.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/pygment_trac.css" media="screen" />
+    <link rel="stylesheet" type="text/css" href="stylesheets/print.css" media="print" />
+
+    <!--[if lt IE 9]>
+    <script src="//html5shiv.googlecode.com/svn/trunk/html5.js"></script>
+    <![endif]-->
+
+    <title>Generic-linked-in-driver by squidfunk</title>
+  </head>
+
+  <body>
+    <header>
+      <div class="inner">
+        <h1>Generic-linked-in-driver</h1>
+        <h2>A generic non-blocking linked-in driver for interfacing Erlang and C</h2>
+        <a href="https://github.com/squidfunk/generic-linked-in-driver" class="button"><small>View project on</small>GitHub</a>
+      </div>
+    </header>
+
+    <div id="content-wrapper">
+      <div class="inner clearfix">
+        <section id="main-content">
+          <h1>
+<a name="a-generic-linked-in-driver-for-erlang" class="anchor" href="#a-generic-linked-in-driver-for-erlang"><span class="octicon octicon-link"></span></a>A Generic Linked-in Driver for Erlang</h1>
+
+<p>This is an attempt to provide a lightweight and clean implementation of a
+generic <a href="http://www.erlang.org/doc/tutorial/c_portdriver.html">linked-in driver</a> for communication between Erlang and C/C++
+programs. It was designed from the ground up to support multi-threaded,
+non-blocking operations, has the ability to hold state across calls and is
+entirely customizable. The rationale behind this generic driver is to provide a
+default and clean implementation for communication between those two
+languages and to minimize the need to write boilerplate code.</p>
+
+<p>Of course there is the Generic Erlang Port Driver (<a href="https://github.com/okeuday/GEPD">GEPD</a>), which lets you
+generate a driver tailored to your needs by specifying function bindings via C
+macros. However, this generic linked-in driver implementation takes a different
+approach and provides the programmer with an easy to use interface without the
+need to generate any code and without any external dependencies. Additionally,
+the name of the driver is set via compiler flag, so that multiple instances of
+the same driver can be compiled and identified by different names without the
+need for code duplication. This is very handy if you design your program to be
+configured during compilation and need different configurations.</p>
+
+<p>There's an example linked-in driver included with the source which demonstrates
+the features of this implementation. You can dive into the code right away or
+keep reading for a detailed reference of features and a simple how-to.</p>
+
+<h2>
+<a name="theory-of-operation" class="anchor" href="#theory-of-operation"><span class="octicon octicon-link"></span></a>Theory of Operation</h2>
+
+<p>The driver consists of two parts: the Erlang part and the C part. On the Erlang
+side the driver is implemented as a generic server. Thus, running a driver
+in a supervision hierarchy is simple and also recommended. Every (!) request
+to the server can be synchronous (<code>call</code>) or asynchronous (<code>cast</code>). Naturally,
+synchronous requests wait for the server to respond, and return the result,
+while asynchronous requests return immediately with <code>ok</code>. In the latter case,
+any errors on the C side (except the driver crashing due to a segfault or other
+critical error) are not reported. Therefore, asynchronous requests should be
+used with caution.</p>
+
+<p>Receiving the binary sent by the Erlang part, the C driver parses the request,
+passes it to a worker thread for non-blocking execution and returns
+immediately. This approach is mandatory, as the main thread on the C side is
+executed <em>synchronously</em>, thus blocking the VM scheduler. Linked-in drivers run
+in the same address space as the Erlang virtual machine, so <a href="http://erlang.org/doc/apps/erts/driver.html#id81992">beware</a>:</p>
+
+<blockquote>
+<p>When a driver is loaded it is executed in the context of the emulator, shares
+the same memory and the same thread. This means that all operations in the
+driver must be non-blocking, and that any crash in the driver will bring the
+whole emulator down. In short: you have to be extremely careful!</p>
+</blockquote>
+
+<p>Thus, before you continue, you should make sure that you have a thorough
+understanding of the C language, or more precisely of the art of memory
+management. You should also know how to use a debugger (<a href="http://www.gnu.org/software/gdb/">gdb</a> is awesome).</p>
+
+<p>Enough talk, let's play.</p>
+
+<h2>
+<a name="installation" class="anchor" href="#installation"><span class="octicon octicon-link"></span></a>Installation</h2>
+
+<p>The generic linked-in driver can be used with plain Erlang or with any OTP
+application. The project itself is compiled using <a href="https://github.com/basho/rebar">Rebar</a>, so in order to
+play with the example driver, just <code>cd</code> into the root directory and <code>make</code> the
+project. Then go to the <code>ebin</code> directory and invoke the <code>erl</code> shell:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="p">{</span> <span class="n">ok</span><span class="p">,</span> <span class="nv">Pid</span> <span class="p">}</span> <span class="o">=</span> <span class="nn">gen_driver_test</span><span class="p">:</span><span class="nf">start_link</span><span class="p">().</span> <span class="c">% =&gt; { ok,&lt;0.33.0&gt; }</span>
+<span class="nn">gen_driver_test</span><span class="p">:</span><span class="nf">sum</span><span class="p">(</span><span class="nv">Pid</span><span class="p">,</span> <span class="p">[</span><span class="mi">1</span><span class="p">,</span><span class="mi">2</span><span class="p">,</span><span class="mi">3</span><span class="p">,</span><span class="mi">4</span><span class="p">]).</span>        <span class="c">% =&gt; { ok, 10.0 }</span>
+<span class="nn">gen_driver_test</span><span class="p">:</span><span class="nf">ping</span><span class="p">(</span><span class="nv">Pid</span><span class="p">).</span>                  <span class="c">% =&gt; ok</span>
+<span class="nn">gen_driver_test</span><span class="p">:</span><span class="nf">stats</span><span class="p">(</span><span class="nv">Pid</span><span class="p">).</span>                 <span class="c">% =&gt; { ok, [{ driver, 2 }, { thread, 2 }] }</span>
+</pre></div>
+
+<p>The <code>stats/1</code> function returns the number of calls to the driver and the invoked
+worker thread. If you start the virtual machine with <code>erl</code>, these numbers will
+always be the same. This is because the request is processed synchronously, as
+no asynchronous worker threads are present. If you start the virtual machine
+with <code>erl +A 4</code>, and thus four worker threads, you will begin to
+see a difference.</p>
+
+<p>Try it.</p>
+
+<p>If you want to use the generic linked-in driver to create your own specific
+driver, you basically have two options: using the linked-in driver as a
+<strong>dependency</strong> or as a <strong>copy</strong>.</p>
+
+<h3>
+<a name="as-a-dependency-via-rebar-recommended" class="anchor" href="#as-a-dependency-via-rebar-recommended"><span class="octicon octicon-link"></span></a>As a dependency via Rebar (recommended)</h3>
+
+<p>Using Rebar (or another build-tool) is absolutely recommended, as the process
+of building a driver is somehow non-trivial. Just open your <code>rebar.config</code> and
+add the following lines to your dependencies:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="p">{</span> <span class="n">deps</span><span class="p">,</span> <span class="p">[</span>
+  <span class="p">{</span> <span class="n">gen_driver</span><span class="p">,</span> <span class="s">".*"</span><span class="p">,</span>
+    <span class="p">{</span> <span class="n">git</span><span class="p">,</span> <span class="s">"git://github.com/squidfunk/generic-linked-in-driver.git"</span><span class="p">,</span> <span class="s">"master"</span> <span class="p">}</span>
+  <span class="p">}</span>
+<span class="p">}.</span>
+</pre></div>
+
+<p>After fetching your dependencies with <code>rebar get-deps</code>, you can start driver
+development. Rebar expects your C source to be located in a directory called
+<code>c_src</code>. If it isn't there already, create it. Then you just have to create
+a new file, include the <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver.h">gen_driver.h</a> header file and define the necessary
+callbacks. The header can be included with:</p>
+
+<div class="highlight highlight-c"><pre><span class="cp">#include "gen_driver.h"</span>
+</pre></div>
+
+<p>During compilation, the folders containing the header files have to be
+included with the following flag:</p>
+
+<pre><code>-I deps/gen_driver/c_src
+</code></pre>
+
+<p>See the section discussing the build process for more information.</p>
+
+<h3>
+<a name="as-a-copy" class="anchor" href="#as-a-copy"><span class="octicon octicon-link"></span></a>As a copy</h3>
+
+<p>If you don't use a build-tool or want the source to be situated in the same
+directory as your specific driver, you can just move <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver.c">gen_driver.c</a> and
+<a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver.h">gen_driver.h</a> to your <code>c_src</code> directory, move the Erlang part consisting of
+<a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/src/gen_driver.erl">gen_driver.erl</a> to <code>src</code>, and get started. Using this approach, including
+the header files and linking them during compilation is easier, as all files
+are located in the same directory. However, you will mix up your business logic
+and dependencies, which is considered bad practice in general.</p>
+
+<h2>
+<a name="usage" class="anchor" href="#usage"><span class="octicon octicon-link"></span></a>Usage</h2>
+
+<h3>
+<a name="erlang" class="anchor" href="#erlang"><span class="octicon octicon-link"></span></a>Erlang</h3>
+
+<p>Creating your own specific linked-in driver using this generic implementation
+is quite simple. Take a look at the example driver <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/src/gen_driver_test.erl">gen_driver_test.erl</a>. The
+driver is started with:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="p">{</span> <span class="n">ok</span><span class="p">,</span> <span class="nv">Pid</span> <span class="p">}</span> <span class="o">=</span> <span class="nn">gen_driver</span><span class="p">:</span><span class="nf">start_link</span><span class="p">(</span><span class="nv">Path</span><span class="p">,</span> <span class="nv">Name</span><span class="p">).</span>
+</pre></div>
+
+<p>A tuple containing the pid is returned, which is the process identifier of the
+associated generic server. Actions can then be called by invoking the
+generic server functions <code>call</code> and <code>cast</code>:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="nn">gen_server</span><span class="p">:</span><span class="nf">call</span><span class="p">(</span><span class="nv">Pid</span><span class="p">,</span> <span class="p">{</span> <span class="n">port</span><span class="p">,</span> <span class="nv">Cmd</span><span class="p">[,</span> <span class="nv">Params</span><span class="p">]</span> <span class="p">}).</span> <span class="c">% =&gt; { ok, Response }</span>
+<span class="nn">gen_server</span><span class="p">:</span><span class="nf">cast</span><span class="p">(</span><span class="nv">Pid</span><span class="p">,</span> <span class="p">{</span> <span class="n">port</span><span class="p">,</span> <span class="nv">Cmd</span><span class="p">[,</span> <span class="nv">Params</span><span class="p">]</span> <span class="p">}).</span> <span class="c">% =&gt; ok</span>
+</pre></div>
+
+<p>The <code>Cmd</code> parameter must be an integer which is used for identifying the
+action to perform on the C side. It is recommended to define those numbers as
+macros in Erlang and C. While parameters are optional, any valid Erlang term
+can be passed.</p>
+
+<p>In the case of our example linked-in driver defined in <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/src/gen_driver_test.erl">gen_driver_test.erl</a>,
+there are two synchronous (<code>sum/2</code>, <code>stats/1</code>) and one asychronous action
+(<code>ping/1</code>). Those functions are just simple wrappers which call the respective
+C functions:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="c">% Take an arbitrary mixed list of integers and floats and add all numbers,</span>
+<span class="c">% returning the resulting sum.</span>
+<span class="p">-</span><span class="ni">spec</span> <span class="n">sum</span><span class="p">(</span><span class="nv">Pid</span> <span class="p">::</span> <span class="n">pid</span><span class="p">(),</span> <span class="nv">Numbers</span> <span class="p">::</span> <span class="p">[</span><span class="nb">float</span><span class="p">(),</span> <span class="p">...])</span>
+  <span class="o">-&gt;</span> <span class="p">{</span> <span class="n">ok</span><span class="p">,</span> <span class="nb">float</span><span class="p">()</span> <span class="p">}</span> <span class="p">|</span> <span class="p">{</span> <span class="n">error</span><span class="p">,</span> <span class="n">atom</span><span class="p">()</span> <span class="p">}.</span>
+<span class="nf">sum</span><span class="p">(</span><span class="nv">Pid</span><span class="p">,</span> <span class="nv">Numbers</span><span class="p">)</span> <span class="o">-&gt;</span>
+  <span class="nn">gen_server</span><span class="p">:</span><span class="nf">call</span><span class="p">(</span><span class="nv">Pid</span><span class="p">,</span> <span class="p">{</span> <span class="n">port</span><span class="p">,</span> <span class="o">?</span><span class="nv">CMD_SUM</span><span class="p">,</span> <span class="nv">Numbers</span> <span class="p">}).</span>
+</pre></div>
+
+<h3>
+<a name="c" class="anchor" href="#c"><span class="octicon octicon-link"></span></a>C</h3>
+
+<p>Going to the C side [sic!], six callbacks need to be implemented. A
+callback-based architecture enables the definition of custom initializers on a
+driver- and thread-level. While the driver initializers are executed during the
+start up phase, thread initializers are executed upon the first invocation of a
+thread. Taken from <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver.h">gen_driver.h</a>, these callbacks are:</p>
+
+<div class="highlight highlight-c"><pre><span class="cm">/**</span>
+<span class="cm"> * Callbacks which manage memory of driver-specific state data.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span> <span class="o">*</span><span class="nf">init</span><span class="p">();</span>
+<span class="kt">void</span> <span class="nf">destroy</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">drv_state</span><span class="p">);</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Callbacks which manage memory of thread-specific state data.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span> <span class="o">*</span><span class="nf">thread_init</span><span class="p">();</span>
+<span class="kt">void</span> <span class="nf">thread_destroy</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">trd_state</span><span class="p">);</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Callbacks which perform load-balancing and the dispatch of the request.</span>
+<span class="cm"> */</span>
+<span class="kt">unsigned</span> <span class="kt">int</span> <span class="o">*</span><span class="nf">balance</span><span class="p">(</span><span class="kt">int</span> <span class="n">cmd</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">char</span> <span class="n">syn</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">int</span> <span class="o">*</span><span class="n">key</span><span class="p">);</span>
+<span class="kt">void</span> <span class="nf">dispatch</span><span class="p">(</span><span class="kt">gd_req_t</span> <span class="o">*</span><span class="n">req</span><span class="p">,</span> <span class="kt">gd_res_t</span> <span class="o">*</span><span class="n">res</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">drv_state</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">trd_state</span><span class="p">);</span>
+</pre></div>
+
+<p>All callbacks must be defined, even if there's no thread-specific data to hold
+or no custom balancing among threads. Thus, a minimal implementation which can
+be used as a skeleton when developing a new driver could be:</p>
+
+<div class="highlight highlight-c"><pre><span class="cp">#include &lt;stdlib.h&gt;</span>
+<span class="cp">#include &lt;stdio.h&gt;</span>
+
+<span class="cp">#include &lt;erl_driver.h&gt;</span>
+<span class="cp">#include &lt;ei.h&gt;</span>
+
+<span class="cp">#include "gen_driver.h"</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Callback to initialize the application-relevant state data when opening the</span>
+<span class="cm"> * port driver and to return a pointer to the newly created driver state.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span> <span class="o">*</span>
+<span class="nf">init</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Upon closing the port, this callback is invoked in order to free all memory</span>
+<span class="cm"> * allocated to the driver state.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span>
+<span class="nf">destroy</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">drv_state</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Initialize any thread-specific data. This is called, when first dispatching</span>
+<span class="cm"> * a request to a thread.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span> <span class="o">*</span>
+<span class="nf">thread_init</span><span class="p">()</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Upon closing the port, this callback is invoked in order to free all memory</span>
+<span class="cm"> * allocated to thread-specific data.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span>
+<span class="nf">thread_destroy</span><span class="p">(</span><span class="kt">void</span> <span class="o">*</span><span class="n">trd_state</span><span class="p">)</span> <span class="p">{</span> <span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Load balancing among threads. Balancing is implemented as a modulo</span>
+<span class="cm"> * operation: % THREADS. Return null for round-robin strategy.</span>
+<span class="cm"> */</span>
+<span class="kt">unsigned</span> <span class="kt">int</span> <span class="o">*</span>
+<span class="nf">balance</span><span class="p">(</span><span class="kt">int</span> <span class="n">cmd</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">char</span> <span class="n">syn</span><span class="p">,</span> <span class="kt">unsigned</span> <span class="kt">int</span> <span class="o">*</span><span class="n">key</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">return</span> <span class="nb">NULL</span><span class="p">;</span>
+<span class="p">}</span>
+
+<span class="cm">/**</span>
+<span class="cm"> * Dispatch an asynchronous request by invoking the respective callback. If no</span>
+<span class="cm"> * matching command is found, return an error.</span>
+<span class="cm"> */</span>
+<span class="kt">void</span>
+<span class="nf">dispatch</span><span class="p">(</span><span class="kt">gd_req_t</span> <span class="o">*</span><span class="n">req</span><span class="p">,</span> <span class="kt">gd_res_t</span> <span class="o">*</span><span class="n">res</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">drv_state</span><span class="p">,</span> <span class="kt">void</span> <span class="o">*</span><span class="n">trd_state</span><span class="p">)</span> <span class="p">{</span>
+  <span class="k">switch</span> <span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">cmd</span><span class="p">)</span> <span class="p">{</span>
+
+    <span class="cm">/* Branch here */</span>
+
+    <span class="k">default</span><span class="o">:</span>
+      <span class="n">error_set</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="s">"command"</span><span class="p">);</span>
+  <span class="p">}</span>
+<span class="p">}</span>
+</pre></div>
+
+<p>Now let's have a look at the dispatch callback which is the entry point for
+requests coming from the Erlang virtual machine. The request as such is
+contained in the first parameter, encoded as a binary, and must be explicitly
+parsed using the <a href="http://erlang.org/doc/man/ei.html">Erlang Interface</a> functions. This is far from being a
+complicated task, so for example, parsing a tuple of the form
+<code>{ question, "Why are we here?" }</code> is as simple as:</p>
+
+<div class="highlight highlight-c"><pre><span class="n">ei_decode_tuple_header</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">size</span><span class="p">);</span>
+<span class="n">ei_decode_atom</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="s">"question"</span><span class="p">);</span>
+<span class="n">ei_decode_string</span><span class="p">(</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">req</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">question</span><span class="p">);</span>
+</pre></div>
+
+<p>However, we should check for the return values of the Erlang Interface
+functions, as they return with a status <code>&gt; 0</code> when an error occurred. Please
+see <code>handle_sum/4</code> in <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver_test.c">gen_driver_test.c</a> for a more complex example. Then,
+after translating an Erlang term into native C datatypes, and doing our
+calculations, we can take the opposite direction and encode the result using
+the same interface:</p>
+
+<div class="highlight highlight-c"><pre><span class="n">ei_encode_tuple_header</span><span class="p">(</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="mi">2</span><span class="p">);</span>
+<span class="n">ei_encode_atom</span><span class="p">(</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="s">"answer"</span><span class="p">);</span>
+<span class="n">ei_encode_string</span><span class="p">(</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">buf</span><span class="p">,</span> <span class="o">&amp;</span><span class="n">res</span><span class="o">-&gt;</span><span class="n">index</span><span class="p">,</span> <span class="s">"Plastic!</span><span class="se">\0</span><span class="s">"</span><span class="p">);</span>
+</pre></div>
+
+<p>While parsing the request involves the first parameter <code>req</code>, the result is
+encoded into the second parameter <code>res</code>. Of course. The result buffer is
+allocated 64 bytes, so after writing some bytes one has to check if the
+allocated memory is still sufficient with <code>res-&gt;index &lt; 64</code>. If it isn't, just
+re-allocate some more bytes.</p>
+
+<p>If an error is encountered during parsing or processing, the helper function
+<code>error_set/2</code> can be used to exit from a handler. The first parameter has to be the
+respective <code>res</code> struct, the second the atom to return, so e.g.:</p>
+
+<div class="highlight highlight-c"><pre><span class="k">return</span> <span class="nf">error_set</span><span class="p">(</span><span class="n">res</span><span class="p">,</span> <span class="s">"badtype"</span><span class="p">);</span> <span class="c1">// =&gt; { error, badtype }</span>
+</pre></div>
+
+<p>This translates to the tuple <code>{ error, badtype }</code> on the Erlang side. You don't
+have to clean the buffer, just set the error and return. However, when you
+return, you must make sure that all resources that were allocated are freed.
+Otherwise your driver will leak memory, and finally, crash your Erlang
+application.</p>
+
+<p>Also remember that asynchronous calls are not able to return anything to the
+Erlang side. Even if you write something to the result buffer, the contents
+are discarded upon termination. This may be desired behaviour, as every
+function on the C side can be called in both ways. However, it just doesn't
+make any sense when you're fetching entries from a database.</p>
+
+<p>And that is basically it. Now that you learned the basics, you should take a
+closer look at <a href="https://github.com/squidfunk/generic-linked-in-driver/blob/master/c_src/gen_driver_test.c">gen_driver_test.c</a>, in order to understand the way how the
+generic driver is used. Interfacing with the generic linked-in driver, the only
+things that need to be done are initializing resources that need to be
+persistent across calls and bound to the driver or single threads, decoding the
+request and encoding the result. Oh, and your custom business logic of course.</p>
+
+<p>Everything else is already implemented.</p>
+
+<h2>
+<a name="building" class="anchor" href="#building"><span class="octicon octicon-link"></span></a>Building</h2>
+
+<p>Now that we're done implementing our driver, we need to build it. As already
+stated, it is absolutely recommended to use <a href="https://github.com/basho/rebar">Rebar</a> or a similar build-tool
+for this task. Building our newly created linked-in driver, we need to specify
+the driver path (e.g. <code>priv</code>) and name (e.g. <code>test</code>) which must match the file
+name of the resulting binary (<code>test.so</code>), and link against the generic driver:</p>
+
+<div class="highlight highlight-erlang"><pre><span class="p">{</span> <span class="n">port_specs</span><span class="p">,</span> <span class="p">[</span>
+  <span class="p">{</span> <span class="s">".*"</span><span class="p">,</span> <span class="s">"priv/test.so"</span><span class="p">,</span> <span class="p">[</span>
+    <span class="s">"deps/gen_driver/c_src/gen_driver.c"</span><span class="p">,</span> <span class="s">"c_src/*.c*"</span>
+  <span class="p">],</span> <span class="p">[</span>
+    <span class="p">{</span> <span class="n">env</span><span class="p">,</span> <span class="p">[</span>
+      <span class="p">{</span> <span class="s">"CFLAGS"</span><span class="p">,</span> <span class="s">"$CFLAGS -std=c99 -I deps/gen_driver/c_src -D DRIVER_NAME=test"</span> <span class="p">}</span>
+    <span class="p">]</span> <span class="p">}</span>
+  <span class="p">]</span> <span class="p">}</span>
+<span class="p">]</span> <span class="p">}.</span>
+</pre></div>
+
+<p>The generic driver is implemented using the C99 standard, so in case GCC is
+used for compilation, the respective flag needs to be set, since GCC defaults to
+C89. The path where the generic driver source is located must also be included. As
+mentioned before, multiple instances of the same driver with different names and
+configurations can be compiled without any code duplication.</p>
+
+<h2>
+<a name="license" class="anchor" href="#license"><span class="octicon octicon-link"></span></a>License</h2>
+
+<p>Copyright (c) 2012 Martin Donath</p>
+
+<p>Permission is hereby granted, free of charge, to any person obtaining a copy
+of this software and associated documentation files (the "Software"), to
+deal in the Software without restriction, including without limitation the
+rights to use, copy, modify, merge, publish, distribute, sublicense, and/or
+sell copies of the Software, and to permit persons to whom the Software is
+furnished to do so, subject to the following conditions:</p>
+
+<p>The above copyright notice and this permission notice shall be included in
+all copies or substantial portions of the Software.</p>
+
+<p>THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
+IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
+FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
+AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
+LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING
+FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
+IN THE SOFTWARE.</p>
+        </section>
+
+        <aside id="sidebar">
+          <a href="https://github.com/squidfunk/generic-linked-in-driver/zipball/master" class="button">
+            <small>Download</small>
+            .zip file
+          </a>
+          <a href="https://github.com/squidfunk/generic-linked-in-driver/tarball/master" class="button">
+            <small>Download</small>
+            .tar.gz file
+          </a>
+
+          <p class="repo-owner"><a href="https://github.com/squidfunk/generic-linked-in-driver"></a> is maintained by <a href="https://github.com/squidfunk">squidfunk</a>.</p>
+
+          <p>This page was generated by <a href="https://pages.github.com">GitHub Pages</a> using the Architect theme by <a href="https://twitter.com/jasonlong">Jason Long</a>.</p>
+        </aside>
+      </div>
+    </div>
+
+  
+  </body>
+</html>
