@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Martin Donath <md@struct.cc>
+ * Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <assert.h>
 #include <stdlib.h>
 #include <stdio.h>
 
@@ -33,9 +34,14 @@
  * Internal dispatch callbacks
  * ------------------------------------------------------------------------- */
 
-/**
+/*!
  * Take an arbitrary mixed list of integers and floats and add all numbers,
  * returning the resulting sum.
+ *
+ * \param[in]     req       Request
+ * \param[in,out] res       Result
+ * \param[in,out] drv_state Driver state
+ * \param[in,out] trd_state Thread state
  */
 static void
 handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
@@ -43,12 +49,12 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
 
   /* Determine type and size */
   if (ei_get_type(req->buf, &req->index, &type, &size) || size <= 0)
-    return error_set(res, GDE_ERR_TPE);
+    return error_set(res, GDE_ERR_TYPE);
 
   /* Allocate memory for numbers */
   double *values, sum = 0;
-  if ((values = driver_alloc(sizeof(double) * size)) == NULL)
-    return error_set(res, GDE_ERR_MEM);
+  if (!(values = driver_alloc(sizeof(double) * size)))
+    return error_set(res, GDE_ERR_MEMORY);
 
   /* Decode list */
   switch (type) {
@@ -57,7 +63,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
     case ERL_STRING_EXT: {
       char value[size];
       if (ei_decode_string(req->buf, &req->index, (char *)&value))
-        return error_set(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DECODE);
       for (int v = 0; v < size; v++)
         values[v] = (double)value[v];
       break;
@@ -66,7 +72,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
     /* Decode ordinary integer/double list */
     case ERL_LIST_EXT: {
       if (ei_decode_list_header(req->buf, &req->index, &size))
-        return error_set(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DECODE);
       for (int v = 0, temp; v < size; v++) {
         ei_get_type(req->buf, &req->index, &type, &temp);
         switch (type) {
@@ -76,7 +82,7 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
           case ERL_INTEGER_EXT: {
             long value;
             if (ei_decode_long(req->buf, &req->index, &value))
-              return error_set(res, GDE_ERR_DEC);
+              return error_set(res, GDE_ERR_DECODE);
             values[v] = (double)value;
             break;
           }
@@ -85,26 +91,26 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
           case ERL_FLOAT_EXT: {
             double value;
             if (ei_decode_double(req->buf, &req->index, &value))
-              return error_set(res, GDE_ERR_DEC);
+              return error_set(res, GDE_ERR_DECODE);
             values[v] = (double)value;
             break;
           }
-          
+
           /* Unsupported type */
           default:
-            return error_set(res, GDE_ERR_TPE);
+            return error_set(res, GDE_ERR_TYPE);
         }
       }
 
       /* A list always contains an empty list at the end */
       if (ei_decode_list_header(req->buf, &req->index, NULL))
-        return error_set(res, GDE_ERR_DEC);
+        return error_set(res, GDE_ERR_DECODE);
       break;
     }
 
     /* Unsupported type */
     default:
-      return error_set(res, GDE_ERR_TPE);
+      return error_set(res, GDE_ERR_TYPE);
   }
 
   /* Sum up values */
@@ -124,9 +130,14 @@ handle_sum(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
   trd->count++;
 }
 
-/**
+/*!
  * Send an asynchronous request to the driver which returns no result, but
  * increments the internal driver and thread counters.
+ *
+ * \param[in]     req       Request
+ * \param[in,out] res       Result
+ * \param[in,out] drv_state Driver state
+ * \param[in,out] trd_state Thread state
  */
 static void
 handle_ping(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
@@ -134,9 +145,14 @@ handle_ping(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
   trd->count++;
 }
 
-/**
+/*!
  * Return statistics (amount of calls) for the driver and the currently active
  * thread. This function does not send any arguments to the driver.
+ *
+ * \param[in]     req       Request
+ * \param[in,out] res       Result
+ * \param[in,out] drv_state Driver state
+ * \param[in,out] trd_state Thread state
  */
 static void
 handle_stats(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
@@ -166,64 +182,82 @@ handle_stats(gd_req_t *req, gd_res_t *res, gdt_drv_t *drv, gdt_trd_t *trd) {
  * Driver callbacks
  * ------------------------------------------------------------------------- */
 
-/**
+/*!
  * Callback to initialize the application-relevant state data when opening the
  * port driver and to return a pointer to the newly created driver state.
+ *
+ * \return Driver state
  */
-void *
-init() {
+extern void *
+init(void) {
   gdt_drv_t *drv;
-  if ((drv = driver_alloc(sizeof(gdt_drv_t))) == NULL) /* destroy */
-    return NULL;
-  drv->count = 0;
-  return (void *)drv;
+  if ((drv = driver_alloc(sizeof(gdt_drv_t)))) /* destroy */
+    drv->count = 0;
+  return drv;
 }
 
-/**
+/*!
  * Upon closing the port, this callback is invoked in order to free all memory
  * allocated to the driver state.
+ *
+ * \param[in,out] drv_state Driver state
  */
-void
+extern void
 destroy(void *drv_state) {
-  driver_free(drv_state); /* init */
+  if (drv_state)
+    driver_free(drv_state); /* init */
 }
 
-/**
+/*!
  * Initialize any thread-specific data. This is called, when first dispatching
  * a request to a thread.
+ *
+ * \return Thread state
  */
-void *
-thread_init() {
+extern void *
+thread_init(void) {
   gdt_trd_t *trd;
-  if ((trd = driver_alloc(sizeof(gdt_trd_t))) == NULL) /* thread_destroy */
-    return NULL;
-  trd->count = 0;
-  return (void *)trd;
+  if ((trd = driver_alloc(sizeof(gdt_trd_t)))) /* thread_destroy */
+    trd->count = 0;
+  return trd;
 }
 
-/**
+/*!
  * Upon closing the port, this callback is invoked in order to free all memory
  * allocated to thread-specific data.
+ *
+ * \param[in,out] trd_state Thread state
  */
-void
+extern void
 thread_destroy(void *trd_state) {
-  driver_free(trd_state); /* thread_init */
+  if (trd_state)
+    driver_free(trd_state); /* thread_init */
 }
 
-/**
+/*!
  * Load balancing among threads. Balancing is implemented as a modulo
  * operation: % THREADS. Return null for round-robin strategy.
+ *
+ * \param[in]     cmd Command
+ * \param[in]     syn Synchronous flag
+ * \param[in,out] key Balancing key
+ * \return            Balancing key
  */
-unsigned int *
+extern unsigned int *
 balance(int cmd, unsigned char syn, unsigned int *key) {
   return NULL;
 }
 
-/**
+/*!
  * Dispatch an asynchronous request by invoking the respective callback. If no
  * matching command is found, return an error.
+ *
+ * \param[in]     req       Request
+ * \param[in,out] res       Result
+ * \param[in,out] drv_state Driver state
+ * \param[in,out] trd_state Thread state
  */
-void
+extern void
 dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state) {
   gdt_drv_t *drv = drv_state;
   gdt_trd_t *trd = trd_state;
@@ -233,13 +267,13 @@ dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state) {
     case GDE_CMD_SUM:
       handle_sum(req, res, drv, trd);
       break;
-    case GDE_CMD_PNG:
+    case GDE_CMD_PING:
       handle_ping(req, res, drv, trd);
       break;
-    case GDE_CMD_STS:
+    case GDE_CMD_STATS:
       handle_stats(req, res, drv, trd);
       break;
     default:
-      error_set(res, GDE_ERR_CMD);
+      error_set(res, GDE_ERR_COMMAND);
   }
 }

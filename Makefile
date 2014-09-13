@@ -1,4 +1,4 @@
-# Copyright (c) 2012 Martin Donath <md@struct.cc>
+# Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
 
 # Permission is hereby granted, free of charge, to any person obtaining a copy
 # of this software and associated documentation files (the "Software"), to
@@ -18,14 +18,12 @@
 # FROM, OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS
 # IN THE SOFTWARE.
 
-REBAR = `which rebar || ./rebar`
-
 all: compile
 
 fresh: clean all
 
 clean:
-	@$(REBAR) clean
+	./rebar clean
 
 compile:
-	@$(REBAR) compile
+	./rebar compile

@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Martin Donath <md@struct.cc>
+ * Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -20,8 +20,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef __GEN_DRIVER__
-#define __GEN_DRIVER__
+#ifndef GEN_DRIVER_H
+#define GEN_DRIVER_H
 
 #include <erl_driver.h>
 
@@ -29,122 +29,129 @@
  * Type definitions
  * ------------------------------------------------------------------------- */
 
-/**
- * This structure holds the thread-specific state data returned by the thread
- * initializer for the respective identifier.
- */
-typedef struct gd_trd_ {
-  long tid;
-  void *state;
+typedef struct gd_trd_t {
+  long tid;                            /*!< Thread identifier */
+  void *state;                         /*!< Thread state */
 } gd_trd_t;
 
-/**
- * This structure holds state across calls. It contains a reference to the port
- * handle, as well as thread- and application-specific state data.
- */
-typedef struct gd_ {
-  ErlDrvPort port;
-  gd_trd_t *trd;
-  void *state;
+typedef struct gd_t {
+  ErlDrvPort port;                     /*!< Erlang port driver */
+  gd_trd_t *trd;                       /*!< Threads */
+  void *state;                         /*!< State */
 } gd_t;
 
-/**
- * This structure encapsulates the request passed to the control callback,
- * including its buffer, the command to execute and whether its synchronous.
- */
-typedef struct gd_req_ {
-  char *buf;
-  ErlDrvSizeT len;
-  int index;
-  int cmd;
-  unsigned char syn;
+/* ------------------------------------------------------------------------- */
+
+typedef struct gd_req_t {
+  char *buf;                           /*!< Buffer */
+  ErlDrvSizeT len;                     /*!< Buffer size */
+  int index;                           /*!< Buffer offset */
+  int cmd;                             /*!< Command */
+  unsigned char syn;                   /*!< Synchronous flag */
 } gd_req_t;
 
-/**
- * This structure holds the result buffer of a request, the current buffer
- * length and offset, as well as any potential error.
- */
-typedef struct gd_res_ {
-  char *buf;
-  ErlDrvSizeT len;
-  int index;
-  char error[32];
+typedef struct gd_res_t {
+  char *buf;                           /*!< Result buffer */
+  ErlDrvSizeT len;                     /*!< Result buffer size */
+  int index;                           /*!< Result buffer offset */
+  char error[64];                      /*!< Error */
 } gd_res_t;
 
-/**
- * The purpose of this structure is to hold pointers to the current request,
- * its result and the state of the driver and threads.
- */
-typedef struct gd_ptr_ {
-  gd_req_t *req;
-  gd_res_t *res;
-  gd_trd_t *trd_state;
-  void *drv_state;
+typedef struct gd_ptr_t {
+  gd_req_t *req;                       /*!< Request */
+  gd_res_t *res;                       /*!< Result */
+  gd_trd_t *trd_state;                 /*!< Thread state */
+  void *drv_state;                     /*!< Driver state */
 } gd_ptr_t;
 
 /* ----------------------------------------------------------------------------
  * Generic entry points
  * ------------------------------------------------------------------------- */
 
-/**
- * Generic entry points for the driver which are called by the Erlang virtual
- * machine when the driver is accessed from or shall report to Erlang.
- */
-ErlDrvData start(ErlDrvPort port, char *cmd);
-void stop(ErlDrvData drv_data);
-void ready(ErlDrvData drv_data, ErlDrvThreadData thread_data);
-ErlDrvSSizeT control(ErlDrvData drv_data, unsigned int cmd, char *buf,
-                     ErlDrvSizeT len, char **rbuf, ErlDrvSizeT rlen);
+extern ErlDrvData
+start(
+  ErlDrvPort port,                     /* Erlang port driver */
+  char *cmd);                          /* Command */
+
+extern void
+stop(
+  ErlDrvData drv_data);                /* Erlang port driver data */
+
+extern void
+ready(
+  ErlDrvData drv_data,                 /* Erlang port driver data */
+  ErlDrvThreadData thread_data);       /* Erlang port driver thread data */
+
+extern ErlDrvSSizeT
+control(
+  ErlDrvData drv_data,                 /* Erlang port driver data */
+  unsigned int cmd,                    /* Command */
+  char *buf,                           /* Buffer */
+  ErlDrvSizeT len,                     /* Buffer size */
+  char **rbuf,                         /* Result buffer */
+  ErlDrvSizeT rlen);                   /* Result buffer size */
 
 /* ----------------------------------------------------------------------------
  * Helper functions
  * ------------------------------------------------------------------------- */
 
-/**
- * Helper functions to ease communication.
- */
-void error_set(gd_res_t *res, char *error);
-int error_occurred(gd_res_t *res);
+extern void
+error_set(
+  gd_res_t *res,                       /* Result */
+  char *error);                        /* Error */
+
+extern int
+error_occurred(
+  gd_res_t *res);                      /* Result */
 
 /* ----------------------------------------------------------------------------
  * Driver callbacks
  * ------------------------------------------------------------------------- */
 
-/**
- * Callbacks which manage memory of driver-specific state data.
- */
-void *init();
-void destroy(void *drv_state);
+extern void *
+init(void);
 
-/**
- * Callbacks which manage memory of thread-specific state data.
- */
-void *thread_init();
-void thread_destroy(void *trd_state);
+extern void
+destroy(
+  void *drv_state);                    /* Driver state */
 
-/**
- * Callbacks which perform load-balancing and the dispatch of the request.
- */
-unsigned int *balance(int cmd, unsigned char syn, unsigned int *key);
-void dispatch(gd_req_t *req, gd_res_t *res, void *drv_state, void *trd_state);
+extern void *
+thread_init(void);
+
+extern void
+thread_destroy(
+  void *trd_state);                    /* Thread state */
+
+extern unsigned int *
+balance(
+  int cmd,                             /* Command */
+  unsigned char syn,                   /* Synchronous flag */
+  unsigned int *key);                  /* Balancing key */
+
+extern void
+dispatch(
+  gd_req_t *req,                       /* Request */
+  gd_res_t *res,                       /* Result */
+  void *drv_state,                     /* Driver state */
+  void *trd_state);                    /* Thread state */
 
 /* ----------------------------------------------------------------------------
  * Macros
  * ------------------------------------------------------------------------- */
 
-/**
+/*
  * If the name of the driver was not passed to the compiler, abort.
  */
 #if !defined(DRIVER_NAME)
   #error DRIVER_NAME not set.
 #endif
 
-/**
+/*
  * Helper to return the provided identifier for the driver as a string.
  */
 #define DRIVER_STRING(name) #name
 
-/**
+/*
  * Driver specification defining entry points for the Erlang driver that are
  * called by the Erlang virtual machine when the driver is accessed. Detailed
  * documentation can be found under the following URLs:
@@ -181,10 +188,13 @@ DRIVER_INIT(name) {                                                           \
   return &driver_entry;                                                       \
 }
 
-/**
- * Error atoms to be returned by the generic driver.
- */
-#define GD_ERR_MEM "memory"
-#define GD_ERR_DEC "decode"
+/* ------------------------------------------------------------------------- */
 
-#endif
+#define GD_CMD_INIT (1 << 30) - 1      /*!< Initialization of threads */
+
+/* ------------------------------------------------------------------------- */
+
+#define GD_ERR_MEMORY "memory"         /*!< Out of memory */
+#define GD_ERR_DECODE "decode"         /*!< Wrong format */
+
+#endif /* GEN_DRIVER_H */

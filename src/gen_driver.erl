@@ -1,4 +1,4 @@
-%% Copyright (c) 2012 Martin Donath <md@struct.cc>
+%% Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
 
 %% Permission is hereby granted, free of charge, to any person obtaining a copy
 %% of this software and associated documentation files (the "Software"), to
@@ -45,9 +45,13 @@
 %% ----------------------------------------------------------------------------
 
 % The driver actually exists, as this was checked in start_link/3. Therefore,
-% we open the port and set it to binary mode for efficient transmission.
+% we open the port and set it to binary mode for efficient transmission. Then
+% we initialize all async threads.
 init(State = #state{ name = Name }) ->
-  { ok, State#state{ port = open_port({ spawn, Name }, [binary]) } }.
+  NewState = State#state{ port = open_port({ spawn, Name }, [binary]) },
+  [ port_control(NewState#state.port, (1 bsl 30) - 1, term_to_binary([])) ||
+    _ <- lists:seq(1, erlang:system_info(thread_pool_size)) ],
+  { ok, NewState }.
 
 % Perform a synchronous call on the port driver with the provided command and
 % data and wait for the response in order to decode and return the result.

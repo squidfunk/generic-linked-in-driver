@@ -1,4 +1,4 @@
-%% Copyright (c) 2012 Martin Donath <md@struct.cc>
+%% Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
 
 %% Permission is hereby granted, free of charge, to any person obtaining a copy
 %% of this software and associated documentation files (the "Software"), to
@@ -33,9 +33,9 @@
 -define(DRV_NAME, "test").
 
 % Commands to be executed by the driver.
--define(CMD_SUM, 16#01).
--define(CMD_PNG, 16#02).
--define(CMD_STS, 16#03).
+-define(CMD_SUM,   1).
+-define(CMD_PING,  2).
+-define(CMD_STATS, 3).
 
 %% ----------------------------------------------------------------------------
 %% Public functions
@@ -67,11 +67,11 @@ sum(Pid, Numbers) ->
 -spec ping(Pid :: pid())
   -> ok.
 ping(Pid) ->
-  gen_server:cast(Pid, { port, ?CMD_PNG }).
+  gen_server:cast(Pid, { port, ?CMD_PING }).
 
 % Return statistics (amount of calls) for the driver and the currently active
 % thread. This function does not send any arguments to the driver.
 -spec stats(Pid :: pid())
   -> { ok, proplists:proplist() } | { error, atom() }.
 stats(Pid) ->
-  gen_server:call(Pid, { port, ?CMD_STS }).
+  gen_server:call(Pid, { port, ?CMD_STATS }).

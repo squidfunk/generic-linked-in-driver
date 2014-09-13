@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Martin Donath <md@struct.cc>
+ * Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -20,6 +20,7 @@
  * IN THE SOFTWARE.
  */
 
+#include <assert.h>
 #include <stdlib.h>
 #include <string.h>
 
@@ -32,59 +33,67 @@
  * Declarations
  * ------------------------------------------------------------------------- */
 
-/**
- * Number of threads for asynchronous processing, set during initialization.
- */
-static int THREADS;
+static int threads;                    /*!< Number of threads */
 
 /* ----------------------------------------------------------------------------
  * Internal functions
  * ------------------------------------------------------------------------- */
 
-/**
+/*!
  * Encode an Erlang term of the form "ok".
+ *
+ * \param[in,out] rbuf  Result buffer
+ * \param[in,out] index Result buffer offset
  */
 static void
 encode_ok(char *rbuf, int *index) {
+  assert(rbuf && index);
   ei_encode_atom(rbuf, index, "ok");
 }
 
-/**
+/*!
  * Encode an Erlang term of the form "{ error, Error }".
+ *
+ * \param[in,out] rbuf  Result buffer
+ * \param[in,out] index Result buffer offset
+ * \param[in]     error Error atom
  */
 static void
-encode_error(char *rbuf, int *index, char *error) {
+encode_error(char *rbuf, int *index, const char *error) {
+  assert(rbuf && index && error);
   ei_encode_tuple_header(rbuf, index, 2);
   ei_encode_atom(rbuf, index, "error");
   ei_encode_atom(rbuf, index, error);
 }
 
-/**
+/*!
  * Internal helper function to ease dispatching by directly passing the
  * request, result and driver and thread state to the dispatch callback.
+ *
+ * \param[in,out] data Driver data
  */
 static void
 async(void *data) {
+  assert(data);
   gd_ptr_t *ptr = data;
+  gd_trd_t *trd = ptr->trd_state;
 
   /* Determine thread identifier */
   long tid = (long)erl_drv_thread_self();
 
   /* Check for thread-specific state */
   void *trd_state = NULL;
-  for (int t = 0; t < THREADS; t++) {
-    gd_trd_t *trd = ptr->trd_state;
+  for (int t = 0; t < threads; t++) {
     if (trd[t].tid == 0 && (trd[t].tid = tid))
-      if ((trd[t].state = thread_init()) == NULL)
-        return error_set(ptr->res, GD_ERR_MEM);
+      trd[t].state = thread_init();
 
     /* Select thread-specific state */
     if (trd[t].tid == tid && (trd_state = trd[t].state))
       break;
   }
 
-  /* Dispatch unless an error occurred */
-  if (!strlen(ptr->res->error))
+  /* Dispatch unless an error or initialization occurred */
+  if (!strlen(ptr->res->error) && ptr->req->cmd != GD_CMD_INIT)
     dispatch(ptr->req, ptr->res, ptr->drv_state, trd_state);
 }
 
@@ -92,46 +101,56 @@ async(void *data) {
  * Generic entry points
  * ------------------------------------------------------------------------- */
 
-/**
+/*!
  * The port is opened, so try to allocate memory for the driver to hold the
  * port descriptor and initialize any state-relevant data via callback.
+ *
+ * \param[in] port Erlang port driver
+ * \param[in] cmd  Command
+ * \return         Erlang port driver data
  */
-ErlDrvData
+extern ErlDrvData
 start(ErlDrvPort port, char *cmd) {
-  set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
+  assert(port && cmd);
   gd_t *drv; ErlDrvSysInfo info;
 
+  /* Set communication to binary mode */
+  set_port_control_flags(port, PORT_CONTROL_FLAG_BINARY);
+
   /* Allocate memory for driver and state */
-  if ((drv = driver_alloc(sizeof(gd_t))) == NULL) /* stop */
-    driver_failure_atom(port, GD_ERR_MEM);
-  else if ((drv->state = init()) == NULL)
-    driver_failure_atom(port, GD_ERR_MEM);
+  if (!(drv = driver_alloc(sizeof(gd_t)))) /* stop */
+    driver_failure_atom(port, GD_ERR_MEMORY);
+  else if (!(drv->state = init()))
+    driver_failure_atom(port, GD_ERR_MEMORY);
   else
     drv->port = port;
 
   /* Determine number of async threads */
-  driver_system_info(&info, sizeof(info));
-  THREADS = info.async_threads ? info.async_threads : 1;
+  driver_system_info(&info, sizeof(ErlDrvSysInfo));
+  threads = info.async_threads ? info.async_threads : 1;
 
   /* Allocate memory for thread states */
-  if ((drv->trd = driver_alloc(sizeof(gd_trd_t) * THREADS)) == NULL) /* stop */
-    driver_failure_atom(port, GD_ERR_MEM);
-  for (int t = 0; t < THREADS; t++)
+  if (!(drv->trd = driver_alloc(sizeof(gd_trd_t) * threads))) /* stop */
+    driver_failure_atom(port, GD_ERR_MEMORY);
+  for (int t = 0; t < threads; t++)
     drv->trd[t].tid = 0;
   return (ErlDrvData)drv;
 }
 
-/**
+/*!
  * The port is about to be closed, so destroy the driver and thread states via
  * callback and free all allocated memory.
+ *
+ * \param[in] drv_data Erlang port driver data
  */
-void
+extern void
 stop(ErlDrvData drv_data) {
-  gd_t *drv = (gd_t *)drv_data;
+  assert(drv_data);
+  gd_t *drv = (void *)drv_data;
 
   /* Destroy thread and driver states */
   destroy(drv->state);
-  for (int t = 0; t < THREADS; t++)
+  for (int t = 0; t < threads; t++)
     if (drv->trd[t].tid)
       thread_destroy(drv->trd[t].state);
 
@@ -140,7 +159,7 @@ stop(ErlDrvData drv_data) {
   driver_free(drv); /* start */
 }
 
-/**
+/*!
  * An asynchronous request was completed, so output the resulting binary to the
  * Erlang virtual machine and free all resources allocated for dispatching.
  *
@@ -148,16 +167,20 @@ stop(ErlDrvData drv_data) {
  * output the data contained in the result buffer to the port, unless an error
  * occurred. In this case just return the error. If no data was set (the index
  * is still at position 1), just return ok.
+ *
+ * \param[in] drv_data    Erlang port driver data
+ * \param[in] thread_data Erlang port driver thread data
  */
-void
+extern void
 ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
-  gd_t *drv     = (gd_t *)drv_data;
-  gd_ptr_t *ptr = (gd_ptr_t *)thread_data;
+  assert(drv_data && thread_data);
+  gd_t     *drv = (void *)drv_data;
+  gd_ptr_t *ptr = (void *)thread_data;
 
   /* Check, if we reached the end of the request buffer */
   ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
   if (!error_occurred(ptr->res) && ptr->req->len != ptr->req->index)
-    error_set(ptr->res, GD_ERR_DEC);
+    error_set(ptr->res, GD_ERR_DECODE);
 
   /* Check for error on synchronous request, output data */
   if (ptr->req->syn) {
@@ -176,7 +199,7 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
   driver_free(ptr); /* control */
 }
 
-/**
+/*!
  * This function handles the actual request from the Erlang virtual machine and
  * is invoked when port_control/3 is called.
  *
@@ -189,8 +212,8 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
  * dispatch the request to one of several worker threads and all buffers are
  * freed at the end of this function. Next, we allocate memory for both,
  * request and result buffers, and copy the request buffer containing the
- * actual request as a binary via memcpy (not strcpy) to make it accessible by
- * worker threads for processing.
+ * actual request as a binary via memcpy to make it accessible by worker
+ * threads for processing.
  *
  * We also need to know, whether the Erlang process calling the driver is
  * interested in the result, and thus made a synchronous request. If not, the
@@ -199,32 +222,42 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
  * index to the beginning of the actual content. If no error occurred while
  * stripping the version byte, the binary data we received seems to be non-
  * corrupted, so we can initialize the result buffer, which we, for now,
- * allocate 64 bytes, encode the version byte, and deploy the request.
+ * allocate 64 bytes, encode the version byte and deploy the request.
+ *
+ * \param[in]     drv_data Erlang port driver data
+ * \param[in]     cmd      Command
+ * \param[in]     buf      Buffer
+ * \param[in]     len      Buffer size
+ * \param[in,out] rbuf     Result buffer
+ * \param[in]     rlen     Result buffer size
+ * \return                 Exit code
  */
-ErlDrvSSizeT
-control(ErlDrvData drv_data, unsigned int cmd, char *buf,
-        ErlDrvSizeT len, char **rbuf, ErlDrvSizeT rlen) {
+extern ErlDrvSSizeT
+control(
+    ErlDrvData drv_data, unsigned int cmd, char *buf,
+    ErlDrvSizeT len, char **rbuf, ErlDrvSizeT rlen) {
+  assert(drv_data && buf && len && rbuf && rlen);
   int index = 0, version;
   ei_encode_version(*rbuf, &index);
 
   /* Allocate memory for request and result */
   gd_ptr_t *ptr; gd_req_t *req; gd_res_t *res;
-  if ((ptr = driver_alloc(sizeof(gd_ptr_t))) == NULL || /* ready */
-      (req = driver_alloc(sizeof(gd_req_t))) == NULL || /* ready */
-      (res = driver_alloc(sizeof(gd_res_t))) == NULL)   /* ready */
-    return encode_error(*rbuf, &index, GD_ERR_MEM), index;
+  if (!(ptr = driver_alloc(sizeof(gd_ptr_t))) || /* ready */
+      !(req = driver_alloc(sizeof(gd_req_t))) || /* ready */
+      !(res = driver_alloc(sizeof(gd_res_t))))   /* ready */
+    return encode_error(*rbuf, &index, GD_ERR_MEMORY), index;
 
   /* Allocate memory for buffers */
-  if ((req->buf = driver_alloc(sizeof(char) * len)) == NULL || /* ready */
-      (res->buf = driver_alloc(sizeof(char) *  64)) == NULL)   /* ready */
-    return encode_error(*rbuf, &index, GD_ERR_MEM), index;
+  if (!(req->buf = driver_alloc(sizeof(char) * len)) || /* ready */
+      !(res->buf = driver_alloc(sizeof(char) * 64)))    /* ready */
+    return encode_error(*rbuf, &index, GD_ERR_MEMORY), index;
   memcpy(req->buf, buf, len);
 
   /* Check for synchronous request and strip version byte */
-  req->syn = (cmd == (cmd & ((1 << 30) - 1)));
+  req->syn = cmd ^ (1 << 30);
   req->len = len; req->index = 0; req->cmd = cmd & ((1 << 30) - 1);
   if (ei_decode_version(req->buf, &req->index, &version)) {
-    encode_error(*rbuf, &index, GD_ERR_DEC);
+    encode_error(*rbuf, &index, GD_ERR_DECODE);
 
   /* Version fine, initialize buffers */
   } else {
@@ -236,16 +269,10 @@ control(ErlDrvData drv_data, unsigned int cmd, char *buf,
     ptr->trd_state = ((gd_t *)drv_data)->trd;
     ptr->req = req; ptr->res = res;
 
-    /* Determine explicit balancing, if any */
-    unsigned int *key;
-    if ((key = driver_alloc(sizeof(unsigned int))) == NULL) /* self */
-      return encode_error(*rbuf, &index, GD_ERR_MEM), index;
-
     /* Pass the request to a worker thread */
+    unsigned int key = 0;
     driver_async(((gd_t *)drv_data)->port,
-      balance(req->cmd, req->syn, key), async, ptr, NULL
-    );
-    driver_free(key); /* self */
+      balance(req->cmd, req->syn, &key), async, ptr, NULL);
     encode_ok(*rbuf, &index);
   }
   return index;
@@ -255,28 +282,36 @@ control(ErlDrvData drv_data, unsigned int cmd, char *buf,
  * Helper functions
  * ------------------------------------------------------------------------- */
 
-/**
+/*!
  * Set an error to be returned by the driver.
+ *
+ * \param[in,out] res   Result
+ * \param[in]     error Error
  */
-void
+extern void
 error_set(gd_res_t *res, char *error) {
+  assert(res && error);
   strcpy(res->error, error);
   res->error[strlen(error)] = 0;
 }
 
-/**
+/*!
  * Examine the result and return true if an error occurred.
+ *
+ * \param[in] res Result
+ * \return        Test result
  */
-int
+extern int
 error_occurred(gd_res_t *res) {
-  return strlen(res->error) == 0 ? 0 : 1;
+  assert(res);
+  return !!strlen(res->error);
 }
 
 /* ----------------------------------------------------------------------------
  * Driver initialization
  * ------------------------------------------------------------------------- */
 
-/**
+/*
  * This macro expands the glue code which is needed to connect up the C driver
  * and the Erlang virtual machine.
  */

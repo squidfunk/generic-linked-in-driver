@@ -1,5 +1,5 @@
 /*
- * Copyright (c) 2012 Martin Donath <md@struct.cc>
+ * Copyright (c) 2012-2014 Martin Donath <md@struct.cc>
  *
  * Permission is hereby granted, free of charge, to any person obtaining a copy
  * of this software and associated documentation files (the "Software"), to
@@ -20,8 +20,8 @@
  * IN THE SOFTWARE.
  */
 
-#ifndef __GEN_DRIVER_TEST__
-#define __GEN_DRIVER_TEST__
+#ifndef GEN_DRIVER_TEST_H
+#define GEN_DRIVER_TEST_H
 
 #include "gen_driver.h"
 
@@ -29,39 +29,27 @@
  * Type definitions
  * ------------------------------------------------------------------------- */
 
-/**
- * This structure is an example for driver-specific state data and holds the
- * amount of calls made to the driver.
- */
 typedef struct gdt_drv_t {
-  int count;
+  int count;                           /*!< Driver call count */
 } gdt_drv_t;
 
-/**
- * This structure is an example for thread-specific state data and holds the
- * amount of calls made to the respective thread.
- */
-typedef struct gdt_trd_ {
-  int count;
+typedef struct gdt_trd_t {
+  int count;                           /*!< Thread call count */
 } gdt_trd_t;
 
 /* ----------------------------------------------------------------------------
  * Macros
  * ------------------------------------------------------------------------- */
 
-/**
- * Actions to be executed by the driver.
- */
-#define GDE_CMD_SUM 0x01
-#define GDE_CMD_PNG 0x02
-#define GDE_CMD_STS 0x03
+#define GDE_CMD_SUM   1                /*!< handle_sum/4 */
+#define GDE_CMD_PING  2                /*!< handle_ping/4 */
+#define GDE_CMD_STATS 3                /*!< handle_stats/4 */
 
-/**
- * Error atoms to be returned by the generic driver.
- */
-#define GDE_ERR_MEM "memory"
-#define GDE_ERR_DEC "decode"
-#define GDE_ERR_CMD "command"
-#define GDE_ERR_TPE "type"
+/* ------------------------------------------------------------------------- */
 
-#endif
+#define GDE_ERR_MEMORY  "memory"       /*!< Out of memory */
+#define GDE_ERR_DECODE  "decode"       /*!< Wrong format */
+#define GDE_ERR_COMMAND "command"      /*!< Unsupported command */
+#define GDE_ERR_TYPE    "type"         /*!< Unsupported type */
+
+#endif /* GEN_DRIVER_TEST_H */
