@@ -338,6 +338,9 @@ name of the resulting binary (`test.so`), and link against the generic driver:
     ] }
   ] }
 ] }.
+{ post_hooks, [
+  { compile, "`which rm` -f deps/gen_driver/c_src/*.o" }
+] }.
 ```
 
 The generic driver is implemented using the C99 standard, so in case GCC is
