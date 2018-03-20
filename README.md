@@ -236,7 +236,9 @@ thread_destroy(void *trd_state) { }
 
 /**
  * Load balancing among threads. Balancing is implemented as a modulo
- * operation: % THREADS. Return null for round-robin strategy.
+ * operation: % THREADS. Return NULL for round-robin strategy. Return the key
+ * parameter unchanged to ensure that the same port will always run on the same
+ * thread.
  */
 unsigned int *
 balance(int cmd, unsigned char syn, unsigned int *key) {
