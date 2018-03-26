@@ -49,7 +49,10 @@
 % we initialize all async threads.
 init(State = #state{ name = Name }) ->
   NewState = State#state{ port = open_port({ spawn, Name }, [binary]) },
-  [ port_control(NewState#state.port, (1 bsl 30) - 1, term_to_binary([])) ||
+  [ begin
+      port_control(NewState#state.port, (1 bsl 30) - 1, term_to_binary([])),
+      ok = wait_result(NewState#state.port)
+    end ||
     _ <- lists:seq(1, erlang:system_info(thread_pool_size)) ],
   { ok, NewState }.
 

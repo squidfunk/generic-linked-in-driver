@@ -93,7 +93,9 @@ async(void *data) {
   }
 
   /* Dispatch unless an error or initialization occurred */
-  if (!strlen(ptr->res->error) && ptr->req->cmd != GD_CMD_INIT)
+  if (ptr->req->cmd == GD_CMD_INIT) {
+    ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
+  } else if (!strlen(ptr->res->error))
     dispatch(ptr->req, ptr->res, ptr->drv_state, trd_state);
 }
 
@@ -178,7 +180,6 @@ ready(ErlDrvData drv_data, ErlDrvThreadData thread_data) {
   gd_ptr_t *ptr = (void *)thread_data;
 
   /* Check, if we reached the end of the request buffer */
-  ei_decode_list_header(ptr->req->buf, &ptr->req->index, NULL);
   if (!error_occurred(ptr->res) && ptr->req->len != ptr->req->index)
     error_set(ptr->res, GD_ERR_DECODE);
 
