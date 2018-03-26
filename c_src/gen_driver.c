@@ -271,7 +271,7 @@ control(
     ptr->req = req; ptr->res = res;
 
     /* Pass the request to a worker thread */
-    unsigned int key = 0;
+    unsigned int key = driver_async_port_key(((gd_t *)drv_data)->port);
     driver_async(((gd_t *)drv_data)->port,
       balance(req->cmd, req->syn, &key), async, ptr, NULL);
     encode_ok(*rbuf, &index);
